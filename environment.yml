@@ -1,0 +1,19 @@
+# Simple offline RL
+# run: conda env create -f environment.yml
+# source activate offlineSRL
+# python setup.py develop
+
+name: offlineSRL
+channels:
+  - conda-forge
+dependencies:
+  # Python
+  - matplotlib
+  - numpy
+  - pandas
+  - scikit-learn
+  - seaborn
+  - ipython
+  - ipykernel
+  - jupyterlab
+  - h5py
