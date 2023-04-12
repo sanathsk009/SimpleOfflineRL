@@ -23,3 +23,9 @@ File structure in OfflineSRL:
   - Implements all learners that fit to MDPDatasets.
   - Relies algorithms in Agent.
   - All files have lots of comments to make the class and methods understandable.
+  
+  
+Modifications:
+- Small modifications to BaseFiniteHorizonFiniteTabularAgent.
+- Created EvalAgent within OfflineSRL/Agent
+- Create OfflineEvaluators
