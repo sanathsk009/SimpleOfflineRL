@@ -111,6 +111,7 @@ class FiniteHorizonTabularAgent():
         # Now make the prior beliefs
         self.R_prior = {}
         self.P_prior = {}
+        self.initial_state_distribution = np.zeros(self.nState, dtype=np.float32)
 
         for state in range(nState):
             for action in range(nAction):
@@ -362,3 +363,9 @@ class FiniteHorizonTabularAgent():
                 qMax[j][s] = np.max(qVals[s, j])
 
         return qVals, qMax
+    
+    def _update_evalpolicy(self, policy):
+        self.evalpolicy = policy
+
+    def update_initial_obs(self, firstState):
+        self.initial_state_distribution[firstState] += 1
