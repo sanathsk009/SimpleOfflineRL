@@ -58,5 +58,27 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
                 evalpolicy[state, timestep] = probs
         self.agent._update_evalpolicy(evalpolicy)
 
+    def update_initial_agent_obs(self, obs):
+        self.agent.update_initial_obs(obs)
+    
+    def update_agent_intervals(self):
+        pass
+    
     def get_interval(self):
         return self.interval
+    
+    def fit(self, mdpdataset):
+        self.n_episodes = len(mdpdataset.episodes)
+        for episode in mdpdataset.episodes:
+            h = 1
+            for transition in episode.transitions:
+                obs = self.state_dict[str(transition.observation)]
+                action = self.action_dict[str(transition.action)]
+                reward = transition.reward
+                newObs = self.state_dict[str(transition.next_observation)]
+                self.update_agent_obs(obs, action, reward, newObs, pContinue = 1, h = h)
+                if h == 1:
+                    self.update_initial_agent_obs(obs)
+                h = h+1
+            self.update_agent_obs(newObs, action, reward, newObs, pContinue=0, h = h)
+        self.update_agent_intervals()
