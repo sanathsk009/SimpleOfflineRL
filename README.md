@@ -30,5 +30,7 @@ Modifications:
   - The update_obs method now also maintains "self.behavioral_state_distribution" the obserseved emperical state distribution at ever step. This can be used to estimate policy values later.
   - It also has a new method _update_evalpolicy to take the extracted policy.
 - Created EvalAgent within OfflineSRL/Agent
+  - StandardPesEvalAgent computes intervals only using pessimistic and optimistic values for the evaluation policy.
+  - Need to add agents based on selective pessimism.
 - Create OfflineEvaluators
   - The base class file is offlineBaseEvalutor. And is sufficiently well committed.
