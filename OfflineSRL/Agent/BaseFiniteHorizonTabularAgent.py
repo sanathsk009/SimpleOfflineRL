@@ -111,7 +111,7 @@ class FiniteHorizonTabularAgent():
         # Now make the prior beliefs
         self.R_prior = {}
         self.P_prior = {}
-        self.initial_state_distribution = np.zeros(self.nState, dtype=np.float32)
+        self.behavioral_state_distribution = np.zeros([self.epLen+1, self.nState], dtype=np.float32)
 
         for state in range(nState):
             for action in range(nAction):
@@ -138,6 +138,7 @@ class FiniteHorizonTabularAgent():
         tau1 = tau0 + self.tau
         mu1 = (mu0 * tau0 + reward * self.tau) / tau1
         self.R_prior[oldState, action] = (mu1, tau1)
+        self.behavioral_state_distribution[h-1][oldState] += 1
 
         if pContinue == 1:
             self.P_prior[oldState, action][newState] += 1
@@ -366,6 +367,3 @@ class FiniteHorizonTabularAgent():
     
     def _update_evalpolicy(self, policy):
         self.evalpolicy = policy
-
-    def update_initial_obs(self, firstState):
-        self.initial_state_distribution[firstState] += 1

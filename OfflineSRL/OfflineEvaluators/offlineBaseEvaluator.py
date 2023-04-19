@@ -1,8 +1,15 @@
 """
-offlineTabularBaseEvaluator builds on offlineTabularBase with one new method:
-- Also takes an evaluation policy (evalpolicy) as input
-- get_interval:
-    - Returns intervals for evaluation policy.
+offlineTabularBaseEvaluator builds on offlineTabularBase with a few differences:
+- Takes an additional input: 
+    - Takes evaluation policy (evalpolicy) as input.
+- Has a few additional methods:
+    - get_interval:
+        - Returns intervals for evaluation policy.
+    - _extract_evalpolicy:
+        - extracts the evaluation policy and passes it to the agent.
+    - update_agent_intervals:
+        - Updates self.interval.
+        - It is now run when the fit method is called.
 
 offlineTabularBase has the following methods:
 - set_map:
@@ -57,9 +64,6 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
                     probs[action] = self.evalpolicy._get_action_prob(self.rev_state_dict[state], self.rev_action_dict[action], timestep)
                 evalpolicy[state, timestep] = probs
         self.agent._update_evalpolicy(evalpolicy)
-
-    def update_initial_agent_obs(self, obs):
-        self.agent.update_initial_obs(obs)
     
     def update_agent_intervals(self):
         pass
@@ -77,8 +81,6 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
                 reward = transition.reward
                 newObs = self.state_dict[str(transition.next_observation)]
                 self.update_agent_obs(obs, action, reward, newObs, pContinue = 1, h = h)
-                if h == 1:
-                    self.update_initial_agent_obs(obs)
                 h = h+1
             self.update_agent_obs(newObs, action, reward, newObs, pContinue=0, h = h)
         self.update_agent_intervals()
