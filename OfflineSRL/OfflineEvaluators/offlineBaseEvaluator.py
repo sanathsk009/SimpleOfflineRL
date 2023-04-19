@@ -10,6 +10,12 @@ offlineTabularBaseEvaluator builds on offlineTabularBase with a few differences:
     - update_agent_intervals:
         - Updates self.interval.
         - It is now run when the fit method is called.
+    - New fit method:
+        - input: MDPDataset
+        - Fit process:
+            - Maps the MDPDataset to format acceptable by the agent (using set_map).
+            - Updates agent with this mapped data.
+            - Then updates the agent's policy.
 
 offlineTabularBase has the following methods:
 - set_map:
@@ -51,7 +57,6 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
             scaling - double - rescale default confidence sets
         '''
         self.evalpolicy = evalpolicy
-        self.interval = (-math.inf, math.inf)
         super().__init__(name, states, actions, epLen)
         self._extract_evalpolicy()
 
@@ -66,10 +71,10 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
         self.agent._update_evalpolicy(evalpolicy)
     
     def update_agent_intervals(self):
-        pass
+        self.agent.update_intervals()
     
     def get_interval(self):
-        return self.interval
+        return self.agent.interval
     
     def fit(self, mdpdataset):
         self.n_episodes = len(mdpdataset.episodes)

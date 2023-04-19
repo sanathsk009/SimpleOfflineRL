@@ -31,9 +31,9 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
 
         return R_bonus
 
-    def compute_pesVals_evalpolicy(self, R, P, pessimism):
+    def compute_extremeVals_evalpolicy(self, R, P, pessimism):
         '''
-        Compute pessimistic values for evaluation policy for a given R, P estimates + bonus
+        Compute extreme values for evaluation policy for a given R, P estimates + bonus
 
         Args:
             R - R[s,a] = mean rewards
@@ -74,3 +74,25 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
                     OptVals[j][s] += self.evalpolicy[s, j][a] * opt_action_contribution
 
         return OptVals, PesVals
+    
+    def update_intervals():
+        '''
+        Update intervals via Gaussian PSRL.
+        This performs value iteration but with additive Gaussian noise.
+        '''
+        # Output the MAP estimate MDP
+        R_hat, P_hat = self.map_mdp()
+
+        # Pessimistic bonus.
+        pessimism = self.gen_bonus(h)
+
+        # Form approximate Q-value estimates
+        OptVals, PesVals = self.compute_qVals_pes(R_hat, P_hat, pessimism)
+
+        self.OptVals = OptVals
+        self.PesVals = PesVals
+
+        emp_dist = self.behavioral_state_distribution[0]
+        lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
+        upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
+        self.interval = (lower_bound, upper_bound)
