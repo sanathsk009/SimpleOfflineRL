@@ -27,5 +27,8 @@ File structure in OfflineSRL:
   
 Modifications:
 - Small modifications to BaseFiniteHorizonFiniteTabularAgent.
+  - The update_obs method now also maintains "self.behavioral_state_distribution" the obserseved emperical state distribution at ever step. This can be used to estimate policy values later.
+  - It also has a new method _update_evalpolicy to take the extracted policy.
 - Created EvalAgent within OfflineSRL/Agent
 - Create OfflineEvaluators
+  - The base class file is offlineBaseEvalutor. And is sufficiently well committed.
