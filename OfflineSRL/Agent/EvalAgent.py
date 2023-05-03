@@ -63,12 +63,12 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
                     max_val = min(self.max_step_reward * (i + 1), self.abs_max_ep_reward) # Smallest max_value
                     min_val = max(self.min_step_reward * (i + 1), -self.abs_max_ep_reward) # Largest min_value
                     
-                    pes_action_contribution = R[s, a] - pessimism[s, a] + np.dot(P[s, a], qMax[j + 1])
+                    pes_action_contribution = R[s, a] - pessimism[s, a] + np.dot(P[s, a], PesVals[j + 1])
                     pes_action_contribution = max(pes_action_contribution, min_val) # Can't be lower than min_val.
                     pes_action_contribution = min(pes_action_contribution, max_val) # Can't be larger than max_val.
                     PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
 
-                    opt_action_contribution = R[s, a] + pessimism[s, a] + np.dot(P[s, a], qMax[j + 1])
+                    opt_action_contribution = R[s, a] + pessimism[s, a] + np.dot(P[s, a], OptVals[j + 1])
                     opt_action_contribution = max(opt_action_contribution, min_val) # Can't be lower than min_val.
                     opt_action_contribution = min(opt_action_contribution, max_val) # Can't be larger than max_val.
                     OptVals[j][s] += self.evalpolicy[s, j][a] * opt_action_contribution
@@ -86,7 +86,7 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
         pessimism = self.gen_bonus(h)
 
         # Form approximate Q-value estimates
-        OptVals, PesVals = self.compute_qVals_pes(R_hat, P_hat, pessimism)
+        OptVals, PesVals = self.compute_extremeVals_evalpolicy(R_hat, P_hat, pessimism)
 
         self.OptVals = OptVals
         self.PesVals = PesVals
@@ -153,8 +153,9 @@ class SelectivelyPessimisticEvalAgent(FiniteHorizonTabularAgent):
         self.shift_prior = shift
         return shift
 
-    def compute_qVals_spes(self, R, P, pessimism, shift):
+    def compute_rectifiedVals_evalpolicy(self, R, P, pessimism, shift):
         '''
+        Still editing.
         Compute the Q values for a given R, P estimates + bonus
 
         Args:
@@ -168,123 +169,67 @@ class SelectivelyPessimisticEvalAgent(FiniteHorizonTabularAgent):
         '''
         OptVals = {}
         PesVals = {}
-        OptGVals = {}
-        PesGVals = {}
 
         OptVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
         PesVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
-        OptGVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
-        PesGVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
+        RVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
+        avg_uncertainty = 0
+        shift_uncertainty = 0 # Need to add uncertainties
 
         for i in range(self.epLen):
             j = self.epLen - i - 1
             OptVals[j] = np.zeros(self.nState, dtype=np.float32)
             PesVals[j] = np.zeros(self.nState, dtype=np.float32)
-            OptGVals[j] = np.zeros(self.nState, dtype=np.float32)
-            PesGVals[j] = np.zeros(self.nState, dtype=np.float32)
+            RVals[j] = np.zeros(self.nState, dtype=np.float32)
 
             for s in range(self.nState):
                 OptVals[j][s] = 0
                 PesVals[j][s] = 0
-                OptGVals[j][s] = 0
-                PesGVals[j][s] = 0
 
                 for a in range(self.nAction):
                     max_val = min(self.max_step_reward * (i + 1), self.abs_max_ep_reward) # Smallest max_value
                     min_val = max(self.min_step_reward * (i + 1), -self.abs_max_ep_reward) # Largest min_value
                     
-                    pes_action_contribution = R[s, a] - pessimism[s, a] + np.dot(P[s, a], qMax[j + 1])
+                    pes_action_contribution = R[s, a] - pessimism[s, a] + np.dot(P[s, a], PesVals[j + 1])
                     pes_action_contribution = max(pes_action_contribution, min_val) # Can't be lower than min_val.
                     pes_action_contribution = min(pes_action_contribution, max_val) # Can't be larger than max_val.
                     PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
 
-                    opt_action_contribution = R[s, a] + pessimism[s, a] + np.dot(P[s, a], qMax[j + 1])
+                    opt_action_contribution = R[s, a] + pessimism[s, a] + np.dot(P[s, a], OptVals[j + 1])
                     opt_action_contribution = max(opt_action_contribution, min_val) # Can't be lower than min_val.
                     opt_action_contribution = min(opt_action_contribution, max_val) # Can't be larger than max_val.
                     OptVals[j][s] += self.evalpolicy[s, j][a] * opt_action_contribution
 
+                    rectified_action_contribution = R[s, a] + np.dot(P[s, a], RVals[j + 1])
+                    rectified_action_contribution = max(rectified_action_contribution, pes_action_contribution)
+                    rectified_action_contribution = min(rectified_action_contribution, opt_action_contribution)
+                    RVals[j][s] += self.evalpolicy[s, j][a] * rectified_action_contribution
 
-        qVals = {}
-        qPol = {}
+                    avg_uncertainty += self.behavioral_state_distribution[j][s] * self.evalpolicy[s, j][a] * pessimism[s, a]
 
-        PesqVals = {}
-        PesqPol = {}
-
-        OptqVals = {}
-        OptqPol = {}
-
-        GVals = {}
-
-        qPol[self.epLen] = np.zeros(self.nState, dtype=np.float32)
-        PesqPol[self.epLen] = np.zeros(self.nState, dtype=np.float32)
-        OptqPol[self.epLen] = np.zeros(self.nState, dtype=np.float32)
-
-        for i in range(self.epLen):
-            j = self.epLen - i - 1
-            qPol[j] = np.zeros(self.nState, dtype=np.float32)
-            PesqPol[j] = np.zeros(self.nState, dtype=np.float32)
-            OptqPol[j] = np.zeros(self.nState, dtype=np.float32)
-
-            for s in range(self.nState):
-                qVals[s, j] = np.zeros(self.nAction, dtype=np.float32)
-                PesqVals[s, j] = np.zeros(self.nAction, dtype=np.float32)
-                OptqVals[s, j] = np.zeros(self.nAction, dtype=np.float32)
-                GVals[s, j] = np.zeros(self.nAction, dtype=np.float32)
-
-                for a in range(self.nAction):
-                    max_val = min(self.max_step_reward * (i + 1), self.abs_max_ep_reward) # Smallest max_value
-                    min_val = max(self.min_step_reward * (i + 1), -self.abs_max_ep_reward) # Largest min_value
-
-                    qVals[s, j][a] = R[s, a] + np.dot(P[s, a], qPol[j + 1])
-                    PesqVals[s, j][a] = R[s, a] - pessimism[s, a] + np.dot(P[s, a], PesqPol[j + 1])
-                    PesqVals[s, j][a] = max(PesqVals[s, j][a], min_val) # Can't be lower than min_val
-                    PesqVals[s, j][a] = min(PesqVals[s, j][a], max_val) # Can't be larger than max_val
-
-                    OptqVals[s, j][a] = R[s, a] + pessimism[s, a] + np.dot(P[s, a], OptqPol[j + 1])
-                    OptqVals[s, j][a] = max(OptqVals[s, j][a], min_val)
-                    OptqVals[s, j][a] = min(OptqVals[s, j][a], max_val)
-
-                    #GVals[s, j][a] = R[s, a] - pessimism[s, a] + np.dot(P[s, a], qPol[j + 1]) \
-                    #                    - min(np.dot(np.maximum(shift[s, a, j],0), OptqPol[j+1] - qPol[j+1]) + np.dot(np.maximum(-shift[s, a, j],0), qPol[j+1] - PesqPol[j+1]), self.maxeprew)
-
-                    """
-                    Line 1 in GVals: Standard value iteration with reward pessimism.
-                    Line 2 in GVals: Propagating underestimation error. (a negative term)
-                    Line 3 in GVals: Propagating overestimation error. (also a negative term)
-                    """
-                    """
-                    # Without bounds based on cumulative reward.
-                    GVals[s, j][a] = R[s, a] - pessimism[s, a] + np.dot(P[s, a], qPol[j + 1]) \
-                                     - np.dot(np.maximum(shift[s, a, j], 0), OptqPol[j + 1] - qPol[j + 1]) \
-                                     - np.dot(np.maximum(-shift[s, a, j], 0), qPol[j + 1] - PesqPol[j + 1])
-                    """
-
-                    max_abs_val = max(max_val, -min_val)
-                    GVals[s, j][a] = R[s, a] - pessimism[s, a] + np.dot(P[s, a], qPol[j + 1]) \
-                                     - min(np.dot(np.maximum(shift[s, a, j], 0), OptqPol[j + 1] - qPol[j + 1]) \
-                                     + np.dot(np.maximum(-shift[s, a, j], 0), qPol[j + 1] - PesqPol[j + 1]), max_abs_val)
-
-                optarm = np.argmax(GVals[s,j])
-                qPol[j][s] = qVals[s,j][optarm]
-                PesqPol[j][s] = PesqVals[s, j][optarm]
-                OptqPol[j][s] = OptqVals[s, j][optarm]
-                #qMax[j][s] = np.max(qVals[s, j])
-
-        return GVals
+        return OptVals, PesVals, RVals, avg_uncertainty
+        
     
-    def update_policy(self, h=False):
+    def update_intervals():
         '''
-        Update Q values via Gaussian PSRL.
-        This performs value iteration but with additive Gaussian noise.
+        Update intervals via UCBVI.
         '''
-        shift = self._get_shift()
         # Output the MAP estimate MDP
         R_hat, P_hat = self.map_mdp()
 
-        # Purely Gaussian perturbations
+        # Pessimistic bonus.
         pessimism = self.gen_bonus(h)
 
-        # Form approximate Q-value estimates
-        GVals = self.compute_qVals_spes(R_hat, P_hat, pessimism, shift)
+        # Get shift
+        shift = self._get_shift()
 
-        self.qVals = GVals
+        # Form approximate Q-value estimates
+        OptVals, PesVals, RVals, avg_uncertainty = self.compute_extremeVals_evalpolicy(R_hat, P_hat, pessimism, shift)
+
+        self.OptVals = OptVals
+        self.PesVals = PesVals
+
+        emp_dist = self.behavioral_state_distribution[0]
+        lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
+        upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
+        self.interval = (lower_bound, upper_bound)
