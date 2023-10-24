@@ -56,7 +56,7 @@ class PVI(offlineTabularBase):
 
 class SPVI(offlineTabularBase):
 
-    def __init__(self, name, states, actions, epLen, bpolicy, scaling=1., max_step_reward = 1, min_step_reward = -1, abs_max_ep_reward = math.inf):
+    def __init__(self, name, states, actions, epLen, bpolicy, scaling=1., max_step_reward = 1, min_step_reward = -1, abs_max_ep_reward = math.inf, is_eval = False):
         '''
         As per the tabular learner, but added tunable scaling.
 
@@ -67,7 +67,7 @@ class SPVI(offlineTabularBase):
         self.max_step_reward = max_step_reward
         self.min_step_reward = min_step_reward
         self.abs_max_ep_reward = abs_max_ep_reward
-        super().__init__(name, states, actions, epLen)
+        super().__init__(name, states, actions, epLen, is_eval=False)
         self.bpolicy = bpolicy
         self._extract_bpolicy()
 

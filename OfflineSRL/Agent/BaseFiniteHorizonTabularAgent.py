@@ -64,6 +64,14 @@ FiniteHorizonTabularAgent has the following methods:
 '''
 
 import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn import preprocessing, svm
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error 
 
 class FiniteHorizonTabularAgent():
     '''
@@ -138,10 +146,114 @@ class FiniteHorizonTabularAgent():
         tau1 = tau0 + self.tau
         mu1 = (mu0 * tau0 + reward * self.tau) / tau1
         self.R_prior[oldState, action] = (mu1, tau1)
+        # print(h)
+        # print(oldState)
         self.behavioral_state_distribution[h-1][oldState] += 1
 
         if pContinue == 1:
             self.P_prior[oldState, action][newState] += 1
+
+    def predict_reward(self):
+
+        df = pd.DataFrame(self.dataset, columns =['State', 'Action', 'Reward', 'Next State'])
+        df_binary = df[['State', 'Action', 'Reward']]
+ 
+# Taking only the selected two attributes from the dataset
+        df_binary.columns = ['State', 'Action', 'Reward']
+        df3 = pd.DataFrame(df_binary['State'].to_list(), columns=['first','second'])
+        X = pd.concat([df3, df_binary['Action']], axis=1)
+        y = df_binary['Reward']
+        tp = pd.concat([X, y], axis=1)
+        # print("dataset--------------------------")
+        # sns.lmplot(x ="first", y ="Reward", data = tp)
+        # plt.show()
+        # print(df_final)
+        # X = np.array(df_binary['State']).reshape(-1, 1)
+        # y = np.array(df_binary['Rewa']).reshape(-1, 1)
+ 
+# Separating the data into independent and dependent variables
+# Converting each dataframe into a numpy array 
+# since each dataframe contains only one column
+#         df_binary.dropna(inplace = True)
+ 
+# # Dropping any rows with Nan values
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.15)
+        regr = MLPRegressor(hidden_layer_sizes=(100, 10), random_state=1, max_iter=1000).fit(X_train, y_train)
+        # 
+
+        print(regr.score(X_test, y_test))
+# # Splitting the data into training and testing data
+        # regr = LinearRegression()
+ 
+        # regr.fit(X_train, y_train)
+        # predictions = regr.predict(X_test) 
+#         print( 
+#   'mean_squared_error : ', mean_squared_error(y_test, predictions)) 
+        print("reward regression score")
+
+        return regr
+        # print(regr.score(X_test, y_test))
+
+
+
+    # def predict_probability(self):
+        # temp = {}
+        # P_hat = {}
+
+        # for state in range(self.nState):
+        #     for action in range(self.nAction):
+                
+        #         self.P_prior[state, action] = (
+        #             np.ones(self.nState, dtype=np.float32))
+
+        # for i in self.dataset:
+        #     self.P_prior[i[0], i[1]][i[3]]+=1
+        # for i in self.dataset:
+        #     self.P_prior[self.state_rev_dici[0], i[1]][i[3]] =  
+        # for s in range(self.nState):
+        #     for a in range(self.nAction):
+        #         P_hat[s, a] = self.P_prior[s, a] / np.sum(self.P_prior[s, a])
+
+        # for i in range(len(self.dataset)):
+            # self.dataset[i].append(self.P_prior[self.dataset[i][0], self.dataset[i][1]]/ np.sum(self.P_prior[self.dataset[i][0], self.dataset[i][1]]))
+
+#         df = pd.DataFrame(self.dataset, columns =['State', 'Action', 'Reward', 'Next State'])
+#         df_binary = df[['State', 'Action', 'Reward']]
+ 
+# # Taking only the selected two attributes from the dataset
+#         df_binary.columns = ['State', 'Action', 'Reward']
+#         df3 = pd.DataFrame(df_binary['State'].to_list(), columns=['first','second'])
+#         df4 = pd.DataFrame(df['Next State'].to_list(), columns=['new first', 'new second'])
+#         X = pd.concat([df3, df_binary['Action'], df4], axis=1)
+#         y = df_binary['Reward']
+#         tp = pd.concat([X, y], axis=1)
+        # print("dataset--------------------------")
+        # sns.lmplot(x ="first", y ="Reward", data = tp)
+        # plt.show()
+        # print(df_final)
+        # X = np.array(df_binary['State']).reshape(-1, 1)
+        # y = np.array(df_binary['Rewa']).reshape(-1, 1)
+ 
+# Separating the data into independent and dependent variables
+# Converting each dataframe into a numpy array 
+# since each dataframe contains only one column
+#         df_binary.dropna(inplace = True)
+ 
+# # Dropping any rows with Nan values
+        # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.15)
+        # regr = MLPRegressor(random_state=1, max_iter=1000).fit(X_train, y_train)
+        # # 
+        # print(regr.score(X_test, y_test))
+# # Splitting the data into training and testing data
+        # regr = LinearRegression()
+ 
+        # regr.fit(X_train, y_train)
+        # predictions = regr.predict(X_test) 
+#         print( 
+#   'mean_squared_error : ', mean_squared_error(y_test, predictions)) 
+        # print("regression score")
+
+
 
     def egreedy(self, state, timestep, epsilon=0):
         '''
@@ -171,6 +283,14 @@ class FiniteHorizonTabularAgent():
         '''
         action = self.egreedy(state, timestep)
         return action
+
+    def action_prob(self, state, timestep):
+        Q = self.qVals[state, timestep]
+        nAction = Q.size
+        probs = np.zeros(self.nAction, dtype=np.float32)
+        equal_q_max = np.where(Q==Q.max())[0]
+        probs[equal_q_max] = 1/len(equal_q_max)
+        return probs
 
     def sample_mdp(self):
         '''

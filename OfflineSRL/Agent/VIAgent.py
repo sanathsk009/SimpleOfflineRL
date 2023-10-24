@@ -284,7 +284,7 @@ class SPVIAgent(FiniteHorizonTabularAgent):
         tau1 = tau0 + self.tau
         mu1 = (mu0 * tau0 + reward * self.tau) / tau1
         self.R_prior[oldState, action] = (mu1, tau1)
-
+        
         if pContinue == 1:
             self.P_prior[oldState, action][newState] += 1
             """
