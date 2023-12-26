@@ -86,16 +86,16 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
 
     def predict_probability(self):
         temp = {}
-        self.P_prior = {}
+        # self.P_prior = {}
 
         for state in range(self.n_states):
             for action in range(self.n_actions):
                 
-                self.P_prior[state, action] = (
+                temp[state, action] = (
                     np.ones(self.n_states))
 
         for i in self.agent.dataset:
-            self.P_prior[self.state_dict[str(i[0])], i[1]][self.state_dict[str(i[3])]]+=1
+            temp[self.state_dict[str(i[0])], i[1]][self.state_dict[str(i[3])]]+=1
         # for i in self.dataset:
         #     self.P_prior[self.rev_state_dict(i[0]), i[1]][self.rev_state_dict(i[3])] =  
         # for s in range(self.nState):
@@ -103,22 +103,27 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
         #         P_hat[s, a] = self.P_prior[s, a] / np.sum(self.P_prior[s, a])
 
         for i in range(len(self.agent.dataset)):
-            self.agent.dataset[i].append(self.P_prior[self.state_dict[str(self.agent.dataset[i][0])], self.agent.dataset[i][1]][self.state_dict[str(self.agent.dataset[i][3])]]/ np.sum(self.P_prior[self.state_dict[str(self.agent.dataset[i][0])], self.agent.dataset[i][1]]))
+            self.agent.dataset[i].append(temp[self.state_dict[str(self.agent.dataset[i][0])], self.agent.dataset[i][1]][self.state_dict[str(self.agent.dataset[i][3])]]/ np.sum(temp[self.state_dict[str(self.agent.dataset[i][0])], self.agent.dataset[i][1]]))
 
         df = pd.DataFrame(self.agent.dataset, columns =['State', 'Action', 'Reward', 'Next State', 'Transition Probability'])
         df_binary = df[['State', 'Action', 'Reward']]
-
+        print(df)
+        print("this is input df with transition prob")
         df_binary.columns = ['State', 'Action', 'Reward']
         df3 = pd.DataFrame(df_binary['State'].to_list(), columns=['first','second'])
         df4 = pd.DataFrame(df['Next State'].to_list(), columns=['new first', 'new second'])
         X = pd.concat([df3, df_binary['Action'], df4], axis=1)
         y = df['Transition Probability']
+
+        print(X)
+        print("this is the transition predictor input")
         # tp = pd.concat([X, y], axis=1)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.15)
         regr = MLPRegressor(hidden_layer_sizes=(100, 10), random_state=1, max_iter=1000).fit(X_train, y_train)
         # 
-        print(regr.score(X_test, y_test))
-        print("transition regression score")
+        print(mean_squared_error(regr.predict(X_test), y_test))
+
+        print("transition mean squared error")
         return regr
     
     def get_interval(self):

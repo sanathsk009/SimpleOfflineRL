@@ -27,7 +27,7 @@ def get_dataset(horizon = 3, neps = 50, third_action_prob = 0.2, num_states =10)
             # Get state.
             # Add state to list.
             cur_state = copy.deepcopy(mdp.cur_state)
-            print(str(cur_state) + "CURRENT_STATE ------------------------------------")
+            
             observations.append(copy.deepcopy(cur_state.num_list))
 
             # Get action
@@ -64,53 +64,58 @@ def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000
     max_step_reward = 1
     abs_max_ep_reward = 1
     min_step_reward = 0
-    if option == "VI":
-        vi = VI(name = "vi", states = observations, actions = policy.actions, epLen = horizon,is_eval = False)
-    if option == "PVI":
-        vi = PVI(name = "pvi", states = observations, actions = policy.actions, epLen = horizon, is_eval = False,
-                 max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward)
-    if option == "SPVI":
-        vi = SPVI(name = "spvi", states = observations, actions = policy.actions, epLen = horizon, bpolicy = policy, is_eval = False,
-                  max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward)
-    if option == "PSL":
-        vi = PesBandit(name = "psl", states = observations, actions = policy.actions, epLen = horizon, is_eval = False)
+    # if option == "VI":
+    #     vi = VI(name = "vi", states = observations, actions = policy.actions, epLen = horizon,is_eval = False)
+    # if option == "PVI":
+    #     vi = PVI(name = "pvi", states = observations, actions = policy.actions, epLen = horizon, is_eval = False,
+    #              max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward)
+    # if option == "SPVI":
+    #     vi = SPVI(name = "spvi", states = observations, actions = policy.actions, epLen = horizon, bpolicy = policy, is_eval = False,
+    #               max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward)
+    # if option == "PSL":
+    #     vi = PesBandit(name = "psl", states = observations, actions = policy.actions, epLen = horizon, is_eval = False)
 
-    vi.fit(dataset)
-    eval_policy = {}
-    # eval_policy
-    for timestep in range(horizon):
-        for s in range(vi.n_states):
-            eval_policy[s, timestep] = vi.agent.action_prob(s, timestep)
+    # vi.fit(dataset)
+    # eval_policy = {}
+    # # eval_policy
+    # print(vi.n_states)
+    # print("number of states")
+    # for timestep in range(horizon):
+    #     for s in range(vi.n_states):
+    #         eval_policy[s, timestep] = vi.agent.action_prob(s, timestep)
   
 
     uncertainty_vec_spvi = []
     uncertainty_vec_pvi = []
-    alphas = [0, 0.2, 0.4, 0.6, 0.8]
+    # alphas = [0, 0.2, 0.4, 0.6, 0.8]
     # neps = [10000, 20000, 50000]
+    temp = [0.1,0.,1,0.8]
 
-    for alpha in alphas:
-        final_policy = {}
-        for timestep in range(horizon):
-            for s in range(vi.n_states):
+    final_policy = {}
+    # for timestep in range(horizon):
+    #     for s in range(vi.n_states):
 
-                final_policy[s, timestep] = eval_policy[s, timestep]*alpha + (1-alpha)*(np.array(policy._get_probs(s, timestep)))
-                if s == 17 and timestep == 99:
-                    print(final_policy[s,timestep])
-                    print("I am herererkfekm")
-                # final_policy[s, timestep] = (np.array(policy._get_probs(s, timestep)))
+    #         final_policy[s, timestep] = eval_policy[s, timestep]*alpha + (1-alpha)*(np.array(policy._get_probs(s, timestep)))
+    #         if s == 10 and timestep == 2:
+    #             print("insdie the specific if")
+                
+    #         # final_policy[s, timestep] = (np.array(policy._get_probs(s, timestep)))
 
+    for timestep in range(horizon):
+        for s in range(2*num_states+1):
+            final_policy[s, timestep] = temp
 
-        pvi_eval = StandardPesEval(name = "pvi", states = num_states, actions=policy.actions, epLen=horizon, evalpolicy=final_policy, is_eval = True)
-        vi_eval = SPVIEval(name = "spvi", states = num_states, actions = policy.actions, epLen = horizon, bpolicy = policy,evalpolicy=final_policy,data_splitting=0, delta=0.9, nTrajectories=neps, epsilon1=0.01, epsilon2=0.01, epsilon3=0.01,
-                    max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward, is_eval = True)
+    pvi_eval = StandardPesEval(name = "pvi", states = num_states, actions=policy.actions, epLen=horizon, evalpolicy=final_policy, is_eval = True)
+    vi_eval = SPVIEval(name = "spvi", states = num_states, actions = policy.actions, epLen = horizon, bpolicy = policy,evalpolicy=final_policy,data_splitting=0, delta=0.9, nTrajectories=neps, epsilon1=0.0001, epsilon2=0.000001, epsilon3=0.00001,
+                max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward, is_eval = True)
 
-        pvi_eval.fit(dataset)
-        vi_eval.fit(dataset)
+    pvi_eval.fit(dataset)
+    vi_eval.fit(dataset)
 
-        uncertainty_vec_pvi.append(pvi_eval.agent.get_interval())
-        uncertainty_vec_spvi.append(vi_eval.agent.get_interval())
+    # uncertainty_vec_pvi.append(pvi_eval.agent.get_interval())
+    # uncertainty_vec_spvi.append(vi_eval.agent.get_interval())
         
-    return (uncertainty_vec_pvi, uncertainty_vec_spvi)
+    return (pvi_eval.agent.get_interval(), vi_eval.agent.get_interval())
     # mdp = ChainBanditMDP(num_states = horizon)
     # viobservations = []
     # viactions = []
@@ -144,12 +149,12 @@ option_list = ["PSL","PVI","SPVI"]
 # for option in option_list:
 #     rew_dict[option] = {}
 n_runs = 1
-horizon = 10
-neps_list = [8000]
+horizon = [5,10,20,30]
+neps_list = [20000,40000,60000,80000,100000,120000]
 
 pvi_vec = []
 spvi_vec = []
-num_states = 5
+num_states = 150
 # for neps in neps_list:
 #     print(neps)
 #     # for option in option_list:
@@ -161,12 +166,12 @@ num_states = 5
 #         rew_dict[neps].append(evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, horizon, neps))
             #print(option)
             #print(option, neps, evaluate_learner(option, copy.deepcopy(observations), policy, dataset, horizon))
+for h in neps_list:
+    observations, policy, dataset = get_dataset(horizon = 20, neps = h, third_action_prob = 0.2, num_states = num_states)
 
-observations, policy, dataset = get_dataset(horizon = horizon, neps = 8000, third_action_prob = 0.2, num_states = num_states)
-
-l, p = evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, horizon, 8000, num_states)
-# pvi_vec.append(l)
-# spvi_vec.append(p)
+    l, p = evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, 20, h, num_states)   
+    pvi_vec.append(l)
+    spvi_vec.append(p)
 
 
 # %%
@@ -188,9 +193,9 @@ import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots()
 # for option in option_list:
-x = [0, 0.2, 0.4, 0.6, 0.8]
-y = l
-y1 = p
+x = [20000, 40000, 60000, 80000,100000,120000]
+y = pvi_vec
+y1 = spvi_vec
 # yerr = err[option]
 # ax.errorbar(x, y)
 #             # yerr=yerr,

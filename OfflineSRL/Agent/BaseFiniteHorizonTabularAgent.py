@@ -156,6 +156,7 @@ class FiniteHorizonTabularAgent():
     def predict_reward(self):
 
         df = pd.DataFrame(self.dataset, columns =['State', 'Action', 'Reward', 'Next State'])
+        print(df)
         df_binary = df[['State', 'Action', 'Reward']]
  
 # Taking only the selected two attributes from the dataset
@@ -163,6 +164,8 @@ class FiniteHorizonTabularAgent():
         df3 = pd.DataFrame(df_binary['State'].to_list(), columns=['first','second'])
         X = pd.concat([df3, df_binary['Action']], axis=1)
         y = df_binary['Reward']
+        print(X)
+        print("this is X input how it should be for reward")
         tp = pd.concat([X, y], axis=1)
         # print("dataset--------------------------")
         # sns.lmplot(x ="first", y ="Reward", data = tp)
@@ -181,7 +184,7 @@ class FiniteHorizonTabularAgent():
         regr = MLPRegressor(hidden_layer_sizes=(100, 10), random_state=1, max_iter=1000).fit(X_train, y_train)
         # 
 
-        print(regr.score(X_test, y_test))
+        print(mean_squared_error(regr.predict(X_test),y_test))
 # # Splitting the data into training and testing data
         # regr = LinearRegression()
  
