@@ -31,7 +31,7 @@ import numpy as np
 
 class offlineTabularBase(object):
 
-    def __init__(self, name, states, actions, epLen, is_eval = False):
+    def __init__(self, name, states, actions, epLen, is_eval = False, is_finite = False):
         self.name = name
         if is_eval:
             self.states = states
@@ -40,6 +40,7 @@ class offlineTabularBase(object):
         self.actions = list(actions) # Just in case we're given a numpy array (like from Atari).
         self.epLen = epLen
         self.is_eval = is_eval
+        self.is_finite = is_finite
         self.set_map()
         self.set_agent()
 

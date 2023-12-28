@@ -1,5 +1,5 @@
 from OfflineSRL.OfflineEvaluators.offlineBaseEvaluator import offlineTabularBaseEvaluator
-from OfflineSRL.Agent.EvalAgent import StandardPesEvalAgent, SelectivelyPessimisticEvalAgent
+from OfflineSRL.Agent.EvalAgent import StandardPesEvalAgent, SelectivelyPessimisticEvalAgent, SelectivePessimisticUpdate
 
 
 import numpy as np
@@ -13,9 +13,37 @@ class StandardPesEval(offlineTabularBaseEvaluator):
     def set_agent(self):
         self.agent = StandardPesEvalAgent(self.n_states, self.n_actions, self.epLen, state_dict=self.state_dict, rev_state_dict=self.rev_state_dict)
 
+class SelectivePesEval(offlineTabularBaseEvaluator):
+
+    def __init__(self, name, states, actions, epLen, evalpolicy, bpolicy, is_eval = True, is_finite = False):
+        '''
+        As per the tabular learner, but added tunable scaling.
+
+        Args:
+            scaling - double - rescale default confidence sets
+        '''
+        
+        super().__init__(name, states, actions, epLen, evalpolicy, is_eval=is_eval, is_finite = is_finite)
+        self.bpolicy = bpolicy
+        self._extract_bpolicy()
+
+    def _extract_bpolicy(self):
+        bpolicy = {}
+        for timestep in range(self.agent.epLen):
+            for state in range(self.agent.nState):
+                probs = (np.zeros(self.agent.nAction, dtype=np.float32))
+                for action in range(self.agent.nAction):
+                    probs[action] = self.bpolicy._get_action_prob(self.rev_state_dict[state], self.rev_action_dict[action], timestep)
+                bpolicy[state, timestep] = probs
+        self.agent._update_bpolicy(bpolicy)
+
+
+    def set_agent(self):
+        self.agent = SelectivePessimisticUpdate(self.n_states, self.n_actions, self.epLen, state_dict=self.state_dict, rev_state_dict=self.rev_state_dict)
+
 class SPVIEval(offlineTabularBaseEvaluator):
 
-    def __init__(self, name, states, actions, epLen, evalpolicy, bpolicy, data_splitting, delta, nTrajectories, epsilon1, epsilon2, epsilon3, scaling=1., max_step_reward = 1, min_step_reward = -1, abs_max_ep_reward = math.inf, is_eval = True):
+    def __init__(self, name, states, actions, epLen, evalpolicy, bpolicy, data_splitting, delta, nTrajectories, epsilon1, epsilon2, epsilon3, scaling=1., max_step_reward = 1, min_step_reward = -1, abs_max_ep_reward = math.inf, is_eval = True, is_finite = False):
         '''
         As per the tabular learner, but added tunable scaling.
 
@@ -32,7 +60,7 @@ class SPVIEval(offlineTabularBaseEvaluator):
         self.epsilon1 = epsilon1
         self.epsilon2 = epsilon2
         self.epsilon3 = epsilon3
-        super().__init__(name, states, actions, epLen, evalpolicy, is_eval=is_eval)
+        super().__init__(name, states, actions, epLen, evalpolicy, is_eval=is_eval, is_finite = is_finite)
         self.bpolicy = bpolicy
         self._extract_bpolicy()
 

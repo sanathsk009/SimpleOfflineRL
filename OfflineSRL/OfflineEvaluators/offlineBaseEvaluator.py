@@ -57,7 +57,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error 
 class offlineTabularBaseEvaluator(offlineTabularBase):
 
-    def __init__(self, name, states, actions, epLen, evalpolicy, is_eval = True):
+    def __init__(self, name, states, actions, epLen, evalpolicy, is_eval = True, is_finite = False):
         '''
         As per the tabular learner, but added tunable scaling.
 
@@ -65,7 +65,7 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
             scaling - double - rescale default confidence sets
         '''
         self.evalpolicy = evalpolicy
-        super().__init__(name, states, actions, epLen, is_eval=is_eval)
+        super().__init__(name, states, actions, epLen, is_eval=is_eval, is_finite = is_finite)
         self._extract_evalpolicy()
 
     def _extract_evalpolicy(self):
@@ -80,9 +80,9 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
     
     def update_agent_intervals(self, trajectory_states, reward_predictor, transition_predictor):
         if self.name == "pvi":
-            self.agent.update_intervals(reward_predictor, transition_predictor)
+            self.agent.update_intervals(reward_predictor, transition_predictor, self.is_finite)
         else:
-            self.agent.update_intervals(trajectory_states, reward_predictor, transition_predictor)
+            self.agent.update_intervals(trajectory_states, reward_predictor, transition_predictor, self.is_finite)
 
     def predict_probability(self):
         temp = {}
@@ -148,6 +148,9 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
             h-=1
             # self.update_agent_obs(newObs, action, reward, newObs, pContinue=0, h = h)
             trajectory_states.append(temp_trajectory_state)
-        reward_predictor = self.agent.predict_reward()
-        transition_predictor = self.predict_probability()
+        reward_predictor = None
+        transition_predictor = None
+        if not self.is_finite:
+            reward_predictor = self.agent.predict_reward()
+            transition_predictor = self.predict_probability()
         self.update_agent_intervals(trajectory_states, reward_predictor, transition_predictor)

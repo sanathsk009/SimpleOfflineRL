@@ -6,7 +6,7 @@ from OfflineSRL.MDP.ChainBandit import ChainBanditMDP
 from OfflineSRL.MDP.ChainBanditState import ChainBanditState
 from OfflineSRL.BPolicy.ChainBanditPolicy import ChainBanditPolicy
 from OfflineSRL.OfflineLearners.offlineLearners import VI, PVI, SPVI, PesBandit
-from OfflineSRL.OfflineEvaluators.offlineEvaluator import SPVIEval, StandardPesEval
+from OfflineSRL.OfflineEvaluators.offlineEvaluator import SPVIEval, StandardPesEval, SelectivePesEval
 
 import copy
 import numpy as np
@@ -89,7 +89,7 @@ def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000
     uncertainty_vec_pvi = []
     # alphas = [0, 0.2, 0.4, 0.6, 0.8]
     # neps = [10000, 20000, 50000]
-    temp = [0.1,0.,1,0.8]
+    temp = [0.1,0.1,0.8]
 
     final_policy = {}
     # for timestep in range(horizon):
@@ -105,17 +105,20 @@ def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000
         for s in range(2*num_states+1):
             final_policy[s, timestep] = temp
 
-    pvi_eval = StandardPesEval(name = "pvi", states = num_states, actions=policy.actions, epLen=horizon, evalpolicy=final_policy, is_eval = True)
+    pvi_eval = StandardPesEval(name = "pvi", states = num_states, actions=policy.actions, epLen=horizon, evalpolicy=final_policy, is_eval = True, is_finite = True)
     vi_eval = SPVIEval(name = "spvi", states = num_states, actions = policy.actions, epLen = horizon, bpolicy = policy,evalpolicy=final_policy,data_splitting=0, delta=0.9, nTrajectories=neps, epsilon1=0.0001, epsilon2=0.000001, epsilon3=0.00001,
-                max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward, is_eval = True)
+                max_step_reward = max_step_reward, min_step_reward = min_step_reward, abs_max_ep_reward = abs_max_ep_reward, is_eval = True, is_finite = True)
+
+    pvi_new_eval = SelectivePesEval(name = "pvi", states = num_states, actions=policy.actions, epLen=horizon, evalpolicy=final_policy,bpolicy = policy, is_eval = True, is_finite = True)
+
 
     pvi_eval.fit(dataset)
-    vi_eval.fit(dataset)
-
+    # vi_eval.fit(dataset)
+    pvi_new_eval.fit(dataset)
     # uncertainty_vec_pvi.append(pvi_eval.agent.get_interval())
     # uncertainty_vec_spvi.append(vi_eval.agent.get_interval())
         
-    return (pvi_eval.agent.get_interval(), vi_eval.agent.get_interval())
+    return (pvi_eval.agent.get_interval(), pvi_new_eval.agent.get_interval())
     # mdp = ChainBanditMDP(num_states = horizon)
     # viobservations = []
     # viactions = []
@@ -150,11 +153,11 @@ option_list = ["PSL","PVI","SPVI"]
 #     rew_dict[option] = {}
 n_runs = 1
 horizon = [5,10,20,30]
-neps_list = [20000,40000,60000,80000,100000,120000]
+neps_list = [2000,4000,6000, 8000, 10000]
 
 pvi_vec = []
 spvi_vec = []
-num_states = 150
+num_states = 5
 # for neps in neps_list:
 #     print(neps)
 #     # for option in option_list:
@@ -167,9 +170,9 @@ num_states = 150
             #print(option)
             #print(option, neps, evaluate_learner(option, copy.deepcopy(observations), policy, dataset, horizon))
 for h in neps_list:
-    observations, policy, dataset = get_dataset(horizon = 20, neps = h, third_action_prob = 0.2, num_states = num_states)
+    observations, policy, dataset = get_dataset(horizon = 10, neps = h, third_action_prob = 0.2, num_states = num_states)
 
-    l, p = evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, 20, h, num_states)   
+    l, p = evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, 10, h, num_states)   
     pvi_vec.append(l)
     spvi_vec.append(p)
 
@@ -193,7 +196,7 @@ import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots()
 # for option in option_list:
-x = [20000, 40000, 60000, 80000,100000,120000]
+x = [2000, 4000, 6000, 8000, 10000]
 y = pvi_vec
 y1 = spvi_vec
 # yerr = err[option]
