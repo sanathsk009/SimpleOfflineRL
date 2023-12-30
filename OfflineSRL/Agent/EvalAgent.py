@@ -6,7 +6,7 @@ from OfflineSRL.Agent.BaseFiniteHorizonTabularAgent import FiniteHorizonTabularA
 class StandardPesEvalAgent(FiniteHorizonTabularAgent):
 
     def __init__(self, nState, nAction, epLen, state_dict, rev_state_dict, 
-                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1., max_step_reward = 1, min_step_reward = -1, abs_max_ep_reward = math.inf):
+                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1., max_step_reward = 1, min_step_reward = 0, abs_max_ep_reward = 1):
         '''
         As per the tabular learner, but added tunable scaling.
 
@@ -106,7 +106,13 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
         # Output the MAP estimate MDP
         
         R_hat1, P_hat1 = self.map_mdp()
-
+        print("this is the probability of taking action 1 on state 1")
+        print(P_hat1[1,1])
+        print("this is the probability of taking action 2 on state 1")
+        print(P_hat1[1,2])
+        print("this is the probability of taking action 3 on state 1")
+        print(P_hat1[1,0])
+       
         # Pessimistic bonus.
         pessimism = self.gen_bonus()
         
@@ -122,6 +128,10 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
         emp_dist = self.behavioral_state_distribution[0]
         lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
         upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
+        print("the upper bound predicted by standard pessimism is ")
+        print(upper_bound)
+        print("the lower bound predicted by standard pessimism is ")
+        # print(_bound)
         self.interval = (lower_bound, upper_bound)
 
     def get_interval(self):
@@ -133,7 +143,7 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
 class SelectivelyPessimisticEvalAgent(FiniteHorizonTabularAgent):
 
     def __init__(self, nState, nAction, epLen,nTrajectories, delta, data_splitting, epsilon1, epsilon2, epsilon3, state_dict, rev_state_dict, 
-                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1.,  max_step_reward = 1, min_step_reward = -1, abs_max_ep_reward = math.inf):
+                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1.,  max_step_reward = 1, min_step_reward = 0, abs_max_ep_reward = 1):
         '''
         As per the tabular learner, but added tunable scaling.
 
@@ -424,10 +434,10 @@ class SelectivelyPessimisticEvalAgent(FiniteHorizonTabularAgent):
                         pes_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] - pessimism[s, a] + np.dot(P[s,a], PesVals[j + 1])
                     pes_action_contribution = max(pes_action_contribution, min_val) # Can't be lower than min_val.
                     pes_action_contribution = min(pes_action_contribution, max_val) # Can't be larger than max_val.
-                    try:
-                        PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
-                    except:
-                        PesVals[j][s] += temp_prob[a] * pes_action_contribution
+                    
+                    PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
+                    # except:
+                    #     PesVals[j][s] += temp_prob[a] * pes_action_contribution
 
                     # opt_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + pessimism[s, a] + np.dot(P.predict(final_input), OptVals[j + 1])
                     if is_finite:
@@ -544,7 +554,7 @@ class SelectivePessimisticUpdate(StandardPesEvalAgent):
         self.PesVals = PesVals
         L_pi = {}
         interval_length = 0
-
+        
         for i in range(self.epLen):
 
             max_val = min(self.max_step_reward * (i + 1), self.abs_max_ep_reward) # Smallest max_value
@@ -559,22 +569,37 @@ class SelectivePessimisticUpdate(StandardPesEvalAgent):
                 pessimism_adjusted = 0
                 for a in range(self.nAction):
 
-                    temp_shift+= shift[s,a,j]*self.evalpolicy[s,j][a]
-                    pessimism_adjusted+= pessimism[s, a]*self.evalpolicy[s,j][a]
+                    temp_shift = np.add(temp_shift, shift[s,a,j]*self.evalpolicy[s,j][a])
+                    pessimism_adjusted += pessimism[s, a]*self.evalpolicy[s,j][a]
+                
+                print("adjusted pessimism")
+                print(pessimism_adjusted)
 
-                L_pi[j][s] = pessimism_adjusted - min(np.dot(np.maximum(temp_shift, 0), OptVals[j + 1] - Vals[j + 1]) \
-                                     + np.dot(np.maximum(-temp_shift, 0), Vals[j + 1] - PesVals[j + 1]), max_abs_val)
+                print("this is shift term")
+                print(temp_shift)
 
+                L_pi[j][s] = min(1,pessimism_adjusted + min(np.dot(np.maximum(temp_shift, 0), OptVals[j + 1] - Vals[j + 1]) \
+                                     + np.dot(np.maximum(-temp_shift, 0), Vals[j + 1] - PesVals[j + 1]), max_abs_val))
+                L_pi[j][s] = min(L_pi[j][s], (OptVals[j][s] - PesVals[j][s])/2)
             emp_dist = self.behavioral_state_distribution[j]
+            print("this is value function")
+            print(np.dot(emp_dist, Vals[j])/np.sum(emp_dist))
+            
             interval_length+= np.dot(emp_dist, L_pi[j])/np.sum(emp_dist)
+            interval_length = min((np.dot(emp_dist, OptVals[j])/np.sum(emp_dist) - np.dot(emp_dist, PesVals[j])/np.sum(emp_dist))/2, interval_length)
 
         emp_dist = self.behavioral_state_distribution[0]
         emp_val = np.dot(emp_dist, Vals[0])/np.sum(emp_dist)
 
+        
+        standard_lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
+        standard_upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
 
-    
         lower_bound = emp_val - interval_length
         upper_bound = emp_val + interval_length
+        # lower_bound = max(standard_lower_bound, lower_bound)
+        # upper_bound = min(standard_upper_bound, upper_bound)
+
         self.interval = (lower_bound, upper_bound)
 
 
@@ -627,10 +652,10 @@ class SelectivePessimisticUpdate(StandardPesEvalAgent):
                     pes_action_contribution = min(pes_action_contribution, max_val) # Can't be larger than max_val.
                     print(pes_action_contribution)
                     print('loondnafd')
-                    try:
-                        PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
-                    except:
-                        PesVals[j][s] += temp_prob[a]* pes_action_contribution
+                    
+                    PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
+                    # except:
+                    #     PesVals[j][s] += temp_prob[a]* pes_action_contribution
 
                     # opt_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + pessimism[s, a] + np.dot(P.predict(final_input), OptVals[j + 1])
                     if is_finite:
@@ -651,9 +676,9 @@ class SelectivePessimisticUpdate(StandardPesEvalAgent):
                         vals_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + np.dot(P[s,a], Vals[j + 1])
 
                     try:
-                        Vals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
+                        Vals[j][s] += self.evalpolicy[s, j][a] * vals_contribution
                     except:
-                        Vals[j][s] += temp_prob[a]* pes_action_contribution
+                        Vals[j][s] += temp_prob[a]* vals_contribution
 
                     Vals[j][s] = max(PesVals[j][s], Vals[j][s])
 

@@ -138,10 +138,15 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
             temp_trajectory_state = []
             for transition in episode.transitions:
                 obs = self.state_dict[str(transition.observation)]
+                print("old state" + str(obs))
                 temp_trajectory_state.append(obs)
-                action = self.action_dict[str(transition.action)]
+                print("this is the main action coming in")
+                print(str(transition.action))
+                action = self.action_dict[str(transition.action)] 
+                print("action" + str(action))
                 reward = transition.reward
                 newObs = self.state_dict[str(transition.next_observation)]
+                print("new state" + str(newObs))
                 self.agent.dataset.append([transition.observation, action, reward, transition.next_observation])
                 self.update_agent_obs(obs, action, reward, newObs, pContinue = 1, h = h)
                 h = h+1

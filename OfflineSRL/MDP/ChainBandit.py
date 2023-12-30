@@ -96,7 +96,7 @@ class ChainBanditMDP(MDP):
     def _get_initial_state(self):
         randint = random.uniform(0,1)
         is_bandit = randint < self.bandit_prob
-        return ChainBanditState([1,is_bandit])
+        return ChainBanditState([1,0])
 
     def _reward_func(self, state, action, next_state=None):
         '''

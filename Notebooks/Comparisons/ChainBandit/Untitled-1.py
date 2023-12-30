@@ -7,7 +7,8 @@ from OfflineSRL.MDP.ChainBanditState import ChainBanditState
 from OfflineSRL.BPolicy.ChainBanditPolicy import ChainBanditPolicy
 from OfflineSRL.OfflineLearners.offlineLearners import VI, PVI, SPVI, PesBandit
 from OfflineSRL.OfflineEvaluators.offlineEvaluator import SPVIEval, StandardPesEval, SelectivePesEval
-
+from statistics import mean, pstdev
+import math
 import copy
 import numpy as np
 
@@ -33,6 +34,7 @@ def get_dataset(horizon = 3, neps = 50, third_action_prob = 0.2, num_states =10)
             # Get action
             # Add action to list
             cur_action = policy._get_action(state = cur_state)
+            
             actions.append(copy.deepcopy(cur_action))
 
             # Execute action
@@ -60,7 +62,7 @@ def get_dataset(horizon = 3, neps = 50, third_action_prob = 0.2, num_states =10)
     return observations, policy, dataset
 
 # %%
-def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000, num_states =10):
+def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000, num_states =10, eval_policy=None):
     max_step_reward = 1
     abs_max_ep_reward = 1
     min_step_reward = 0
@@ -89,7 +91,7 @@ def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000
     uncertainty_vec_pvi = []
     # alphas = [0, 0.2, 0.4, 0.6, 0.8]
     # neps = [10000, 20000, 50000]
-    temp = [0.1,0.1,0.8]
+    # temp = [0.1,0.1,0.8]
 
     final_policy = {}
     # for timestep in range(horizon):
@@ -103,7 +105,7 @@ def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000
 
     for timestep in range(horizon):
         for s in range(2*num_states+1):
-            final_policy[s, timestep] = temp
+            final_policy[s, timestep] = eval_policy
 
     pvi_eval = StandardPesEval(name = "pvi", states = num_states, actions=policy.actions, epLen=horizon, evalpolicy=final_policy, is_eval = True, is_finite = True)
     vi_eval = SPVIEval(name = "spvi", states = num_states, actions = policy.actions, epLen = horizon, bpolicy = policy,evalpolicy=final_policy,data_splitting=0, delta=0.9, nTrajectories=neps, epsilon1=0.0001, epsilon2=0.000001, epsilon3=0.00001,
@@ -114,6 +116,7 @@ def evaluate_learner(option, observations, policy, dataset, horizon, neps = 5000
 
     pvi_eval.fit(dataset)
     # vi_eval.fit(dataset)
+    
     pvi_new_eval.fit(dataset)
     # uncertainty_vec_pvi.append(pvi_eval.agent.get_interval())
     # uncertainty_vec_spvi.append(vi_eval.agent.get_interval())
@@ -153,11 +156,16 @@ option_list = ["PSL","PVI","SPVI"]
 #     rew_dict[option] = {}
 n_runs = 1
 horizon = [5,10,20,30]
-neps_list = [2000,4000,6000, 8000, 10000]
+neps_list = [2000,4000,6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000]
 
 pvi_vec = []
 spvi_vec = []
+error_1_pvi = []
+errror_2_spvi = []
 num_states = 5
+
+
+policies = [[0.02,0.49,0.49], [0.1,0.40,0.40], [0.20,0.40,0.40], [0.30,0.35,0.35], [0.40,0.30,0.30], [0.60,0.20,0.20], [0.80, 0.10, 0.10]]
 # for neps in neps_list:
 #     print(neps)
 #     # for option in option_list:
@@ -169,12 +177,27 @@ num_states = 5
 #         rew_dict[neps].append(evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, horizon, neps))
             #print(option)
             #print(option, neps, evaluate_learner(option, copy.deepcopy(observations), policy, dataset, horizon))
-for h in neps_list:
-    observations, policy, dataset = get_dataset(horizon = 10, neps = h, third_action_prob = 0.2, num_states = num_states)
 
-    l, p = evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, 10, h, num_states)   
-    pvi_vec.append(l)
-    spvi_vec.append(p)
+for h in policies:
+    print("this is the policy being followed")
+    print(h)
+    # observations, policy, dataset = get_dataset(horizon = 10, neps = h, third_action_prob = 0.01, num_states = num_states)
+    obs_1 = []
+    obs_2 = []
+    for times in range(1):
+        observations, policy, dataset = get_dataset(horizon = 6, neps = 2000, third_action_prob = 0.02, num_states = num_states)
+        print(dataset)
+        l, p = evaluate_learner("SPVI", copy.deepcopy(observations), policy, dataset, 6, 2000, num_states,h)  
+        pvi_vec.append(l)
+        spvi_vec.append(p)
+    # mean_1 = mean(obs_1)
+    # mean_2 = mean(obs_2)
+    # error_1 = pstdev(obs_1) / math.sqrt(20)
+    # error_2 = pstdev(obs_2) / math.sqrt(20)
+    # error_1_pvi.append(error_1)
+    # errror_2_spvi.append(error_2)
+    # pvi_vec.append(mean_1)
+    # spvi_vec.append(mean_2)
 
 
 # %%
@@ -196,7 +219,7 @@ import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots()
 # for option in option_list:
-x = [2000, 4000, 6000, 8000, 10000]
+x = [0.02, 0.1, 0.20, 0.30, 0.40, 0.60, 0.80]
 y = pvi_vec
 y1 = spvi_vec
 # yerr = err[option]
@@ -204,8 +227,13 @@ y1 = spvi_vec
 #             # yerr=yerr,
 #             # fmt='-o', label = option)
 
-plt.plot(x, y)
-plt.plot(x,y1 )
+plt.plot(x, y, **{'marker':'o'})
+
+plt.plot(x,y1, **{'marker' : 'o'})
+plt.xlabel("Third action probability")
+plt.ylabel("Interval width")
+plt.legend(["Standard Pessimism", "Selective Pessimism"])
+plt.title("Chain Bandit: horizon=10")
 print(x)
 print(y)
 # ax.set_xlabel('Number of training episodes')
