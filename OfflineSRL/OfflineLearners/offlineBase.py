@@ -27,14 +27,20 @@ offlineTabularBase has the following methods:
 """
 
 from OfflineSRL.Agent.BaseFiniteHorizonTabularAgent import FiniteHorizonTabularAgent
+import numpy as np
 
 class offlineTabularBase(object):
 
-    def __init__(self, name, states, actions, epLen):
+    def __init__(self, name, states, actions, epLen, is_eval = False, is_finite = False):
         self.name = name
-        self.states = list(states)
+        if is_eval:
+            self.states = states
+        else:
+            self.states = list(states)
         self.actions = list(actions) # Just in case we're given a numpy array (like from Atari).
         self.epLen = epLen
+        self.is_eval = is_eval
+        self.is_finite = is_finite
         self.set_map()
         self.set_agent()
 
@@ -49,17 +55,33 @@ class offlineTabularBase(object):
         self.rev_action_dict = {}
         self.n_states = 0
         self.n_actions = 0
-        for state in self.states:
-            if str(state) not in self.state_dict:
-                self.state_dict[str(state)] = self.n_states
-                self.rev_state_dict[self.n_states] = state
-                self.n_states += 1
 
+
+        if self.is_eval:
+            self.state_dict[str(np.array([-1, -1]))] = 0
+            self.rev_state_dict[0] = np.array([-1, -1])
+            for state in range(1, self.states+1):
+                self.state_dict[str(np.array([state, 0]))] = (2*state)-1
+                self.state_dict[str(np.array([state, 1]))] = (2*state)
+                self.rev_state_dict[(2*state)-1] = np.array([state, 0])
+                self.rev_state_dict[2*state] = np.array([state, 1])
+
+        else:
+            for state in self.states:
+                if str(state) not in self.state_dict:
+                        self.state_dict[str(state)] = self.n_states
+                        self.rev_state_dict[self.n_states] = state
+                        self.n_states += 1
+        if self.is_eval:
+            print(self.state_dict)
         for action in self.actions:
             if str(action) not in self.action_dict:
                 self.action_dict[str(action)] = self.n_actions
                 self.rev_action_dict[self.n_actions] = action
                 self.n_actions += 1
+
+        if self.is_eval:
+            self.n_states = (2*self.states) + 1
 
     def set_agent(self):
         self.agent = FiniteHorizonTabularAgent(self.n_states, self.n_actions, self.epLen)
@@ -87,8 +109,10 @@ class offlineTabularBase(object):
                 reward = transition.reward
                 newObs = self.state_dict[str(transition.next_observation)]
                 self.update_agent_obs(obs, action, reward, newObs, pContinue = 1, h = h)
-                h = h+1
+                h+=1
+            h-=1
             self.update_agent_obs(newObs, action, reward, newObs, pContinue=0, h = h)
+           
         self.update_agent_policy()
 
     def act(self, state, timestep):

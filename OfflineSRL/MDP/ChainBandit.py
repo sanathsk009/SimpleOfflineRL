@@ -44,7 +44,7 @@ Transition model (Bandit environment, second component 1):
     - [x,1] -> [x+1,1] for all x<num_state.
     - [num_state,1] -> [-1,-1].
 
-Transition model (MDP environment, second component 1):
+Transition model (MDP environment, second component 0):
 - For all actions:
     - [num_state,0] -> [-1,-1].
 - For actions [0,1]:
@@ -96,7 +96,7 @@ class ChainBanditMDP(MDP):
     def _get_initial_state(self):
         randint = random.uniform(0,1)
         is_bandit = randint < self.bandit_prob
-        return ChainBanditState([1,is_bandit])
+        return ChainBanditState([1,0])
 
     def _reward_func(self, state, action, next_state=None):
         '''
