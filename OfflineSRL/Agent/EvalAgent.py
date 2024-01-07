@@ -6,7 +6,7 @@ from OfflineSRL.Agent.BaseFiniteHorizonTabularAgent import FiniteHorizonTabularA
 class StandardPesEvalAgent(FiniteHorizonTabularAgent):
 
     def __init__(self, nState, nAction, epLen, state_dict, rev_state_dict, 
-                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1., max_step_reward = 1, min_step_reward = 0, abs_max_ep_reward = 1):
+                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1., max_step_reward = 1, min_step_reward = 0, abs_max_ep_reward = 1.2):
         '''
         As per the tabular learner, but added tunable scaling.
 
@@ -21,6 +21,12 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
         self.max_step_reward = max_step_reward
         self.min_step_reward = min_step_reward
         self.abs_max_ep_reward = abs_max_ep_reward
+        self.delta = 0.05
+
+    def _update_bpolicy(self, policy, evaluation_step):
+        self.bpolicy = policy
+        self.evaluation_step = evaluation_step
+
 
     def gen_bonus(self):
         ''' Generate the sqrt(n) bonus for UCBVI '''
@@ -29,7 +35,7 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
             for a in range(self.nAction):
                 R_sum = self.R_prior[s, a][1]
                 #R_bonus[s, a] = self.scaling * np.sqrt(2. * np.log(2 + h) / R_sum)
-                R_bonus[s, a] = self.scaling * np.sqrt(np.log(self.nState * self.nAction * self.epLen) / R_sum)
+                R_bonus[s, a] = (self.scaling * np.sqrt(np.log(self.nState * self.nAction * self.epLen / self.delta) / R_sum))
 
         return R_bonus
 
@@ -98,6 +104,78 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
                         OptVals[j][s] += temp_prob[a] * opt_action_contribution
 
         return OptVals, PesVals
+
+
+    def compute_extremeVals_bpolicy(self, R, P, pessimism, is_finite):
+        '''
+        Compute extreme values for evaluation policy for a given R, P estimates + bonus
+
+        Args:
+            R - R[s,a] = mean rewards
+            P - P[s,a] = probability vector of transitions
+            pessimism - pessimism[s,a] = bonus for state action visitation.
+
+        Returns:
+            OptVals - OptVals[state, timestep] is the optimistic value for evalution policy at state-time pair.
+            PesVals - PesVals[state, timestep] is the pessimistic value for evalution policy at state-time pair.
+        '''
+        OptVals = {}
+        PesVals = {}
+        test = [tuple(i[1]) for i in list(self.rev_state_dict.items())]
+        test = np.array(test)
+        OptVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
+        PesVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
+        temp_prob = [0.2,0.4,0.4]
+        for i in range(self.epLen):
+            j = self.epLen - i - 1
+            OptVals[j] = np.zeros(self.nState, dtype=np.float32)
+            PesVals[j] = np.zeros(self.nState, dtype=np.float32)
+
+            for s in range(self.nState):
+                OptVals[j][s] = 0
+                PesVals[j][s] = 0
+
+                for a in range(self.nAction):
+                    max_val = min(self.max_step_reward * (i + 1), self.abs_max_ep_reward) # Smallest max_value
+                    min_val = max(self.min_step_reward * (i + 1), -self.abs_max_ep_reward) # Largest min_value
+                    # final_input = np.concatenate((np.broadcast_to(self.rev_state_dict[s], (self.nState, 2)), np.broadcast_to(np.int64(a),(self.nState, 1)), test), axis = 1)
+                    print(self.rev_state_dict[s])
+                    
+                    # pes_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] - pessimism[s, a] + np.dot(P.predict(final_input), PesVals[j + 1])
+                    if is_finite:
+                        pes_action_contribution = R[s,a] - pessimism[s, a] + np.dot(P[s,a], PesVals[j + 1])
+                    else:
+                        pes_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] - pessimism[s, a] + np.dot(P[s,a], PesVals[j + 1])
+                    print(P[s,a])
+                    print("this is pessimism")
+                    pes_action_contribution = max(pes_action_contribution, min_val) # Can't be lower than min_val.
+                    pes_action_contribution = min(pes_action_contribution, max_val) # Can't be larger than max_val.
+                    print(pes_action_contribution)
+                    print('loondnafd')
+
+                    if j < self.evaluation_step + 1:
+                        PesVals[j][s] += self.bpolicy[s, j][a] * pes_action_contribution
+                    else:
+                        PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
+                    
+
+                    # opt_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + pessimism[s, a] + np.dot(P.predict(final_input), OptVals[j + 1])
+                    if is_finite:
+                        opt_action_contribution = R[s,a] + pessimism[s, a] + np.dot(P[s,a], OptVals[j + 1])
+                    else:
+                        opt_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + pessimism[s, a] + np.dot(P[s,a], OptVals[j + 1])
+
+                    opt_action_contribution = max(opt_action_contribution, min_val) # Can't be lower than min_val.
+                    opt_action_contribution = min(opt_action_contribution, max_val) # Can't be larger than max_val.
+                    
+
+                    if j < self.evaluation_step + 1:
+                        OptVals[j][s] += self.bpolicy[s, j][a] * opt_action_contribution
+                    else:
+                        OptVals[j][s] += self.evalpolicy[s, j][a] * opt_action_contribution
+                    
+
+        return OptVals, PesVals
     
     def update_intervals(self, R_hat, P_hat, is_finite):
         '''
@@ -106,13 +184,13 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
         # Output the MAP estimate MDP
         
         R_hat1, P_hat1 = self.map_mdp()
-        print("this is the probability of taking action 1 on state 1")
-        print(P_hat1[1,1])
-        print("this is the probability of taking action 2 on state 1")
-        print(P_hat1[1,2])
-        print("this is the probability of taking action 3 on state 1")
-        print(P_hat1[1,0])
-       
+        # print("this is the probability of taking action 1 on state 1")
+        # print(P_hat1[1,1])
+        # print("this is the probability of taking action 2 on state 1")
+        # print(P_hat1[1,2])
+        # print("this is the probability of taking action 3 on state 1")
+        # print(P_hat1[1,0])
+
         # Pessimistic bonus.
         pessimism = self.gen_bonus()
         
@@ -122,20 +200,44 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
         else:
             OptVals, PesVals = self.compute_extremeVals_evalpolicy(R_hat, P_hat1, pessimism, is_finite)
 
+        if is_finite:
+            OptVals_bpolicy, PesVals_bpolicy = self.compute_extremeVals_bpolicy(R_hat1, P_hat1, pessimism, is_finite)
+        else:
+            OptVals_bpolicy, PesVals_bpolicy = self.compute_extremeVals_bpolicy(R_hat, P_hat1, pessimism, is_finite)
+
+
+
         self.OptVals = OptVals
         self.PesVals = PesVals
 
+
+
         emp_dist = self.behavioral_state_distribution[0]
-        lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
-        upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
-        print("the upper bound predicted by standard pessimism is ")
-        print(upper_bound)
-        print("the lower bound predicted by standard pessimism is ")
+
+        emp_dist = self.behavioral_state_distribution[self.evaluation_step]
+
+        lower_bound = (np.dot(emp_dist, PesVals[self.evaluation_step] - OptVals_bpolicy[self.evaluation_step])/np.sum(emp_dist)) - (1/(math.sqrt(len(emp_dist))))
+        upper_bound = np.dot(emp_dist, OptVals[self.evaluation_step] - PesVals_bpolicy[self.evaluation_step])/np.sum(emp_dist) + (1/(math.sqrt(len(emp_dist))))
+
+        # lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
+        # upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
+
+
+        # print("the upper bound predicted by standard pessimism is ")
+        # print(upper_bound)
+        # print("the lower bound predicted by standard pessimism is ")
         # print(_bound)
         self.interval = (lower_bound, upper_bound)
 
     def get_interval(self):
         return self.interval[1] - self.interval[0]
+
+    def get_lower_bound(self):
+        return self.interval[0]
+    
+    def get_upper_bound(self):
+        return self.interval[1]
+
 
     def get_total_uncertainty(self):
         return self.total_uncertainty
@@ -143,7 +245,7 @@ class StandardPesEvalAgent(FiniteHorizonTabularAgent):
 class SelectivelyPessimisticEvalAgent(FiniteHorizonTabularAgent):
 
     def __init__(self, nState, nAction, epLen,nTrajectories, delta, data_splitting, epsilon1, epsilon2, epsilon3, state_dict, rev_state_dict, 
-                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1.,  max_step_reward = 1, min_step_reward = 0, abs_max_ep_reward = 1):
+                 alpha0=1., mu0=0., tau0=1., tau=1., scaling=1.,  max_step_reward = 1, min_step_reward = -1, abs_max_ep_reward = math.inf):
         '''
         As per the tabular learner, but added tunable scaling.
 
@@ -499,9 +601,9 @@ class SelectivelyPessimisticEvalAgent(FiniteHorizonTabularAgent):
 
 class SelectivePessimisticUpdate(StandardPesEvalAgent):
 
-    def _update_bpolicy(self, policy):
+    def _update_bpolicy(self, policy, evaluation_step):
         self.bpolicy = policy
-
+        self.evaluation_step = evaluation_step
 
     def _get_shift(self, R, P):
         # R_hat, P_hat = self.map_mdp()
@@ -550,53 +652,72 @@ class SelectivePessimisticUpdate(StandardPesEvalAgent):
         else:
             OptVals, PesVals = self.compute_extremeVals_evalpolicy(R_hat, P_hat1, pessimism, is_finite)
 
+        if is_finite:
+            OptVals_bpolicy, PesVals_bpolicy, Vals_bpolicy = self.compute_extremeVals_bpolicy(R_hat1, P_hat1, pessimism, is_finite)
+        else:
+            OptVals_bpolicy, PesVals_bpolicy, Vals_bpolicy = self.compute_extremeVals_bpolicy(R_hat, P_hat1, pessimism, is_finite)
+
+
         self.OptVals = OptVals
         self.PesVals = PesVals
         L_pi = {}
         interval_length = 0
         
-        for i in range(self.epLen):
+        
+        max_val = min(self.max_step_reward * (self.epLen - self.evaluation_step), self.abs_max_ep_reward) # Smallest max_value
+        min_val = max(self.min_step_reward * (self.epLen - self.evaluation_step), -self.abs_max_ep_reward) # Largest min_value
+        max_abs_val = max(max_val, -min_val)
 
-            max_val = min(self.max_step_reward * (i + 1), self.abs_max_ep_reward) # Smallest max_value
-            min_val = max(self.min_step_reward * (i + 1), -self.abs_max_ep_reward) # Largest min_value
-            max_abs_val = max(max_val, -min_val)
+        # j = self.epLen - i - 1
+        L_pi_evaluation = np.zeros(self.nState, dtype = np.float32)
+        L_pi_bpolicy = np.zeros(self.nState, dtype = np.float32)
+        for s in range(self.nState):
+            temp_shift = np.zeros(self.nState, dtype= np.float32)
+            pessimism_adjusted = 0
+            pessimism_adjusted_bpolicy = 0
+            for a in range(self.nAction):
 
-            j = self.epLen - i - 1
-            L_pi[j] = np.zeros(self.nState, dtype = np.float32)
-            
-            for s in range(self.nState):
-                temp_shift = np.zeros(self.nState, dtype= np.float32)
-                pessimism_adjusted = 0
-                for a in range(self.nAction):
+                temp_shift = np.add(temp_shift, shift[s,a,self.evaluation_step]*self.evalpolicy[s,self.evaluation_step][a])
+                pessimism_adjusted += pessimism[s, a]*self.evalpolicy[s,self.evaluation_step][a]
+                pessimism_adjusted_bpolicy += pessimism[s, a]*self.bpolicy[s,self.evaluation_step][a]
+            # print("adjusted pessimism")
+            # print(pessimism_adjusted)
 
-                    temp_shift = np.add(temp_shift, shift[s,a,j]*self.evalpolicy[s,j][a])
-                    pessimism_adjusted += pessimism[s, a]*self.evalpolicy[s,j][a]
-                
-                print("adjusted pessimism")
-                print(pessimism_adjusted)
+            # print("this is shift term")
+            # print(temp_shift)
 
-                print("this is shift term")
-                print(temp_shift)
+            L_pi_evaluation[s] = min(1.2,pessimism_adjusted + min(np.dot(np.maximum(temp_shift, 0), OptVals[self.evaluation_step+1] - Vals[self.evaluation_step+1]) \
+                                    + np.dot(np.maximum(-temp_shift, 0), Vals[self.evaluation_step + 1] - PesVals[self.evaluation_step + 1]), max_abs_val))
+            # L_pi_evaluation[s] = min(L_pi_evaluation[s], (OptVals[self.evaluation_step][s] - PesVals[self.evaluation_step][s])/2)
 
-                L_pi[j][s] = min(1,pessimism_adjusted + min(np.dot(np.maximum(temp_shift, 0), OptVals[j + 1] - Vals[j + 1]) \
-                                     + np.dot(np.maximum(-temp_shift, 0), Vals[j + 1] - PesVals[j + 1]), max_abs_val))
-                L_pi[j][s] = min(L_pi[j][s], (OptVals[j][s] - PesVals[j][s])/2)
-            emp_dist = self.behavioral_state_distribution[j]
-            print("this is value function")
-            print(np.dot(emp_dist, Vals[j])/np.sum(emp_dist))
-            
-            interval_length+= np.dot(emp_dist, L_pi[j])/np.sum(emp_dist)
-            interval_length = min((np.dot(emp_dist, OptVals[j])/np.sum(emp_dist) - np.dot(emp_dist, PesVals[j])/np.sum(emp_dist))/2, interval_length)
+            L_pi_bpolicy[s] = min(1.2,pessimism_adjusted_bpolicy) 
+            # L_pi_bpolicy[s] = min(L_pi_bpolicy[s], (OptVals_bp[self.evaluation_step][s] - PesVals[self.evaluation_step][s])/2)
 
-        emp_dist = self.behavioral_state_distribution[0]
-        emp_val = np.dot(emp_dist, Vals[0])/np.sum(emp_dist)
+
+        emp_dist = self.behavioral_state_distribution[self.evaluation_step]
+        # print("this is value function")
+        # print(np.dot(emp_dist, Vals[j])/np.sum(emp_dist))
+        
+
+
+
+        interval_length = np.dot(emp_dist, L_pi_evaluation + L_pi_bpolicy)/np.sum(emp_dist)
+        # interval_length = min((np.dot(emp_dist, OptVals[j])/np.sum(emp_dist) - np.dot(emp_dist, PesVals[j])/np.sum(emp_dist))/2, interval_length)
+
+        emp_dist = self.behavioral_state_distribution[self.evaluation_step]
+
+        emp_val = np.dot(emp_dist, Vals[self.evaluation_step] - Vals_bpolicy[self.evaluation_step])/np.sum(emp_dist)
 
         
-        standard_lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
-        standard_upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
+        # standard_lower_bound = np.dot(emp_dist, PesVals[0])/np.sum(emp_dist)
+        # standard_upper_bound = np.dot(emp_dist, OptVals[0])/np.sum(emp_dist)
 
-        lower_bound = emp_val - interval_length
-        upper_bound = emp_val + interval_length
+        lower_bound = emp_val - interval_length - (1/(math.sqrt(len(emp_dist))))
+        upper_bound = emp_val + interval_length + (1/(math.sqrt(len(emp_dist))))
+        print("our value estimate is ")
+        print(emp_val)
+        # lower_bound = max(0, lower_bound)
+        # upper_bound = min(1.2, upper_bound)
         # lower_bound = max(standard_lower_bound, lower_bound)
         # upper_bound = min(standard_upper_bound, upper_bound)
 
@@ -685,3 +806,93 @@ class SelectivePessimisticUpdate(StandardPesEvalAgent):
                     Vals[j][s] = min(OptVals[j][s], Vals[j][s])
 
         return OptVals, PesVals, Vals
+
+
+    def compute_extremeVals_bpolicy(self, R, P, pessimism, is_finite):
+        '''
+        Compute extreme values for evaluation policy for a given R, P estimates + bonus
+
+        Args:
+            R - R[s,a] = mean rewards
+            P - P[s,a] = probability vector of transitions
+            pessimism - pessimism[s,a] = bonus for state action visitation.
+
+        Returns:
+            OptVals - OptVals[state, timestep] is the optimistic value for evalution policy at state-time pair.
+            PesVals - PesVals[state, timestep] is the pessimistic value for evalution policy at state-time pair.
+        '''
+        OptVals = {}
+        PesVals = {}
+        Vals = {}
+        test = [tuple(i[1]) for i in list(self.rev_state_dict.items())]
+        test = np.array(test)
+        OptVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
+        PesVals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
+        Vals[self.epLen] = np.zeros(self.nState, dtype=np.float32)
+        temp_prob = [0.2,0.4,0.4]
+
+        for i in range(self.epLen):
+            j = self.epLen - i - 1
+            OptVals[j] = np.zeros(self.nState, dtype=np.float32)
+            PesVals[j] = np.zeros(self.nState, dtype=np.float32)
+            Vals[j] = np.zeros(self.nState, dtype=np.float32)
+            for s in range(self.nState):
+                OptVals[j][s] = 0
+                PesVals[j][s] = 0
+                Vals[j][s] = 0
+                for a in range(self.nAction):
+                    max_val = min(self.max_step_reward * (i + 1), self.abs_max_ep_reward) # Smallest max_value
+                    min_val = max(self.min_step_reward * (i + 1), -self.abs_max_ep_reward) # Largest min_value
+                    # final_input = np.concatenate((np.broadcast_to(self.rev_state_dict[s], (self.nState, 2)), np.broadcast_to(np.int64(a),(self.nState, 1)), test), axis = 1)
+                    print(self.rev_state_dict[s])
+                    
+                    # pes_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] - pessimism[s, a] + np.dot(P.predict(final_input), PesVals[j + 1])
+                    if is_finite:
+                        pes_action_contribution = R[s,a] - pessimism[s, a] + np.dot(P[s,a], PesVals[j + 1])
+                    else:
+                        pes_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] - pessimism[s, a] + np.dot(P[s,a], PesVals[j + 1])
+                    print(P[s,a])
+                    print("this is pessimism")
+                    pes_action_contribution = max(pes_action_contribution, min_val) # Can't be lower than min_val.
+                    pes_action_contribution = min(pes_action_contribution, max_val) # Can't be larger than max_val.
+                    print(pes_action_contribution)
+                    print('loondnafd')
+                    
+                    if j < self.evaluation_step + 1:
+                        PesVals[j][s] += self.bpolicy[s, j][a] * pes_action_contribution
+                    else:
+                        PesVals[j][s] += self.evalpolicy[s, j][a] * pes_action_contribution
+                    # except:
+                    #     PesVals[j][s] += temp_prob[a]* pes_action_contribution
+
+                    # opt_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + pessimism[s, a] + np.dot(P.predict(final_input), OptVals[j + 1])
+                    if is_finite:
+                        opt_action_contribution = R[s,a] + pessimism[s, a] + np.dot(P[s,a], OptVals[j + 1])
+                    else:
+                        opt_action_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + pessimism[s, a] + np.dot(P[s,a], OptVals[j + 1])
+
+                    opt_action_contribution = max(opt_action_contribution, min_val) # Can't be lower than min_val.
+                    opt_action_contribution = min(opt_action_contribution, max_val) # Can't be larger than max_val.
+
+                    if j < self.evaluation_step + 1:
+                        OptVals[j][s] += self.bpolicy[s, j][a] * opt_action_contribution
+                    else:
+                        OptVals[j][s] += self.evalpolicy[s, j][a] * opt_action_contribution
+                    
+                    if is_finite:
+                        vals_contribution = R[s,a] + np.dot(P[s,a], Vals[j + 1])
+                    else:
+                        vals_contribution = R.predict(np.array([self.rev_state_dict[s][0], self.rev_state_dict[s][1], a]).reshape(1, -1))[0] + np.dot(P[s,a], Vals[j + 1])
+
+                    if j < self.evaluation_step + 1:
+                        Vals[j][s] += self.bpolicy[s, j][a] * vals_contribution
+                    else:
+                        Vals[j][s] += self.evalpolicy[s, j][a] * vals_contribution
+                    
+
+                    Vals[j][s] = max(PesVals[j][s], Vals[j][s])
+
+                    Vals[j][s] = min(OptVals[j][s], Vals[j][s])
+
+        return OptVals, PesVals, Vals
+

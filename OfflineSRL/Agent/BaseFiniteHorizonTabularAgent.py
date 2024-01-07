@@ -333,7 +333,8 @@ class FiniteHorizonTabularAgent():
             for a in range(self.nAction):
                 R_hat[s, a] = self.R_prior[s, a][0]
                 P_hat[s, a] = self.P_prior[s, a] / np.sum(self.P_prior[s, a])
-
+        print("number of times")
+        print(self.P_prior[1,0])
         return R_hat, P_hat
 
     def compute_qVals(self, R, P):

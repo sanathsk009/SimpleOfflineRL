@@ -156,6 +156,7 @@ class offlineTabularBaseEvaluator(offlineTabularBase):
         reward_predictor = None
         transition_predictor = None
         if not self.is_finite:
+            print("here")
             reward_predictor = self.agent.predict_reward()
             transition_predictor = self.predict_probability()
         self.update_agent_intervals(trajectory_states, reward_predictor, transition_predictor)

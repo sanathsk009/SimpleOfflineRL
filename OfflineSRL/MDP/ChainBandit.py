@@ -118,8 +118,9 @@ class ChainBanditMDP(MDP):
                 if state.num_list[0] == self.num_states:
                     return 1
                 elif state.num_list[0]%2 == action:
-                    randint = random.uniform(0, 1)
-                    return randint < self.bandit_rew_scale/(self.num_states)
+                    # randint = random.uniform(0, 1)
+                    # return randint < self.bandit_rew_scale/(self.num_states)
+                    return 0.1 / 5
                 else:
                     return 0
 
@@ -128,8 +129,9 @@ class ChainBanditMDP(MDP):
             # For action [0,1].
             if action[0] in [0,1]:
                 if state.num_list[0]%2 == action[0]:
-                    randint = random.uniform(0, 1)
-                    return randint < self.bandit_rew_scale / (self.num_states)
+                    # randint = random.uniform(0, 1)
+                    # return randint < self.bandit_rew_scale / (self.num_states)
+                    return 0.1 / 5
                 else:
                     return 0
             # For action -1.
